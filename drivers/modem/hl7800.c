@@ -503,7 +503,7 @@ struct hl7800_iface_ctx {
 	char mdm_sn[MDM_HL7800_SERIAL_NUMBER_SIZE];
 	char mdm_network_status[MDM_NETWORK_STATUS_LENGTH];
 	char mdm_iccid[MDM_HL7800_ICCID_SIZE];
-	uint8_t mdm_startup_state;
+	enum mdm_hl7800_startup_state mdm_startup_state;
 	enum mdm_hl7800_radio_mode mdm_rat;
 	char mdm_active_bands_string[MDM_HL7800_LTE_BAND_STR_SIZE];
 	char mdm_bands_string[MDM_HL7800_LTE_BAND_STR_SIZE];
@@ -3724,8 +3724,6 @@ static int modem_boot_handler(char *reason)
 		LOG_ERR("Err waiting for boot: %d, DSR: %u", ret,
 			ictx.dsr_state);
 		return -1;
-	} else if (ictx.mdm_startup_state != HL7800_STARTUP_STATE_READY) {
-		return -1;
 	} else {
 		LOG_INF("Modem booted!");
 	}
@@ -4059,7 +4057,7 @@ reboot:
 	SEND_COMPLEX_AT_CMD("AT+KGSN=3");
 
 	/* query SIM ICCID */
-	SEND_AT_CMD_EXPECT_OK("AT+CCID?");
+	SEND_AT_CMD_IGNORE_ERROR("AT+CCID?");
 
 	/* An empty string is used here so that it doesn't conflict
 	 * with the APN used in the +CGDCONT command.
