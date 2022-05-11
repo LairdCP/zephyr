@@ -5414,8 +5414,10 @@ reboot:
 	/* query all socket configs to cleanup any sockets that are not
 	 * tracked by the driver
 	 */
-	SEND_AT_CMD_EXPECT_OK("AT+KTCPCFG?");
-	SEND_AT_CMD_EXPECT_OK("AT+KUDPCFG?");
+	if (!ictx.initialized) {
+		SEND_AT_CMD_EXPECT_OK("AT+KTCPCFG?");
+		SEND_AT_CMD_EXPECT_OK("AT+KUDPCFG?");
+	}
 
 	/* The modem has been initialized and now the network interface can be
 	 * started in the CEREG message handler.
