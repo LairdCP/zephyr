@@ -83,7 +83,7 @@ static atomic_t initialized;
 static bool panic_mode;
 static bool backend_attached;
 static atomic_t buffered_cnt;
-static atomic_t dropped_cnt;
+atomic_t dropped_cnt;
 static k_tid_t proc_tid;
 static atomic_t log_strdup_in_use;
 static uint32_t log_strdup_max;
