@@ -40,10 +40,10 @@ static void fs_mgmt_event_callback(uint8_t event, const struct mgmt_hdr *hdr, vo
 /**************************************************************************************************/
 #define MCUMGR_OVERHEAD (CBOR_AND_OTHER_HDR + 32)
 
-/* should this be based on/read from transport? */
-/* no, server side could be busy */
-/* queryable parameter */
-#define CONFIG_FS_CMD_TIMEOUT_MS 2000
+/* Should be read from transport, but
+ * if client is busy or slow to write fs then it shouldn't timeout either.
+ */
+#define CONFIG_FS_CMD_TIMEOUT_MS 3000
 
 #define BUILD_NETWORK_HEADER(op, len, id) SET_NETWORK_HEADER(op, len, MGMT_GROUP_ID_FS, id)
 
@@ -166,6 +166,11 @@ static int download_rsp_handler(struct mgmt_ctxt *ctxt)
 			} else {
 				r = MGMT_ERR_OFFSET;
 			}
+		}
+
+		/* Increment offset for next request */
+		if (r == 0) {
+			fs_ctx.offset += fs_ctx.chunk_size;
 		}
 	}
 
