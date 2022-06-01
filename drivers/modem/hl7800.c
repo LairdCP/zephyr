@@ -569,6 +569,7 @@ struct hl7800_iface_ctx {
 #ifdef CONFIG_MODEM_HL7800_GPS
 	struct k_work_delayable gps_work;
 	uint32_t gps_query_location_rate_seconds;
+	bool gps_running;
 #endif
 };
 
@@ -1241,10 +1242,16 @@ int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 	wakeup_hl7800();
 	ictx.gps_query_location_rate_seconds = rate;
 
-	/* Stopping first allows changing the rate between two non-zero values.
-	 * Ignore error if GNSS isn't running.
+	/* Default to true because it is better to have an error
+	 * message from an unnecessary stop than the inability to set new value.
 	 */
-	SEND_AT_CMD_IGNORE_ERROR("AT+GNSSSTOP");
+	ictx.gps_running = true;
+	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
+
+	/* Stopping first allows changing the rate between two non-zero values. */
+	if (ictx.gps_running) {
+		SEND_AT_CMD_IGNORE_ERROR("AT+GNSSSTOP");
+	}
 
 	if (rate == 0) {
 		SEND_AT_CMD_EXPECT_OK("AT+CFUN=1,0");
@@ -1262,6 +1269,8 @@ int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 		/* Enable GPS */
 		SEND_AT_CMD_EXPECT_OK("AT+GNSSSTART=0");
 	}
+
+	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
 
 error:
 	if (rate && ret == 0) {
@@ -2949,6 +2958,44 @@ static bool on_cmd_ver_speed(struct net_buf **buf, uint16_t len)
 {
 	return gps_handler(buf, len, HL7800_GPS_STR_VER_SPEED);
 }
+
+/* +GNSSSTOP: <status>
+ * OK
+ * <status> Status of the last AT+GNSSSTOP request
+ * 0 GNSS is still running
+ * 1 GNSS is stopped
+ */
+static bool on_cmd_gps_status(struct net_buf **buf, uint16_t len)
+{
+	char gps_str[sizeof("0")];
+	size_t gps_len = sizeof(gps_str) - 1;
+	struct net_buf *frag = NULL;
+	size_t out_len;
+
+	wait_for_modem_data_and_newline(buf, net_buf_frags_len(*buf), sizeof(gps_str));
+
+	frag = NULL;
+	len = net_buf_findcrlf(*buf, &frag);
+	if (!frag) {
+		LOG_ERR("Unable to find end");
+		goto done;
+	}
+
+	if (len > gps_len) {
+		LOG_WRN("GPS string too long (len:%d)", len);
+		len = gps_len;
+	}
+
+	out_len = net_buf_linearize(gps_str, gps_len, *buf, 0, len);
+	gps_str[out_len] = 0;
+
+	ictx.gps_running = (strstr(gps_str, "0") != NULL);
+
+	LOG_INF("GPS %s", ictx.gps_running ? "running" : "stopped");
+
+done:
+	return true;
+}
 #endif /* CONFIG_MODEM_HL7800_GPS */
 
 #ifdef CONFIG_MODEM_HL7800_POLTE
@@ -4611,6 +4658,7 @@ static void hl7800_rx(void)
 		CMD_HANDLER("Direction: ", direction),
 		CMD_HANDLER("HorSpeed: ", hor_speed),
 		CMD_HANDLER("VerSpeed: ", ver_speed),
+		CMD_HANDLER("+GNSSSTOP: ", gps_status),
 #endif
 
 #ifdef CONFIG_MODEM_HL7800_POLTE
