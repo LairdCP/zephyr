@@ -7,13 +7,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <logging/log.h>
-LOG_MODULE_REGISTER(fs_mgmt_client, CONFIG_MCUMGR_CLIENT_FS_LOG_LEVEL);
+LOG_MODULE_REGISTER(mcumgr_client_fs, CONFIG_MCUMGR_CLIENT_FS_LOG_LEVEL);
 
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
 #include <init.h>
-
+#include <sys/printk.h>
 #include <mgmt/endian.h>
 
 #include "file_download_cmd_encode.h"
@@ -203,6 +203,7 @@ static int upload_rsp_handler(struct mgmt_ctxt *ctxt)
 				r = MGMT_ERR_OFFSET;
 			}
 		} else {
+			/* FS commands use MGMT error codes for return code */
 			r = rsp.rc;
 		}
 	}
@@ -331,6 +332,19 @@ static int upload_chunk(struct zephyr_smp_transport *transport)
 		r = fs_send_cmd(transport, &fs_ctx.cmd_hdr, fs_ctx.cmd);
 
 		fs_ctx.first_chunk = false;
+
+		if (IS_ENABLED(CONFIG_MCUMGR_FS_LOG_VERBOSE)) {
+			int i;
+			printk("off: %u len: %u\r\n", fs_ctx.offset, file_upload_cmd.data.len);
+			for (i = 0; i < file_upload_cmd.data.len; i++) {
+				printk("%02x ", file_upload_cmd.data.value[i]);
+				if ((i % 16) == 0) {
+					printk("\r\n");
+				}
+			}
+			printk("\r\n");
+		}
+
 	} while (0);
 
 	k_free(buf);
@@ -354,6 +368,14 @@ static int upload(struct zephyr_smp_transport *transport)
 	} while ((r == 0) && (fs_ctx.offset < fs_ctx.size));
 
 	return r;
+}
+
+/* The UL chunk size is currently a compile time constant that must match on
+ * both sides of the link.
+ */
+static int get_chunk_size(struct zephyr_smp_transport *transport)
+{
+	return MIN(transport->zst_get_mtu(NULL) - MCUMGR_OVERHEAD, CONFIG_FS_MGMT_UL_CHUNK_SIZE);
 }
 
 /**************************************************************************************************/
@@ -425,16 +447,11 @@ int fs_mgmt_client_upload(struct zephyr_smp_transport *transport, const char *na
 			  const void *data, size_t size, size_t *offset)
 {
 	int r;
-	int adjusted_mtu;
+	int chunk_size = get_chunk_size(transport);
 
-#if 1
-	adjusted_mtu = transport->zst_get_mtu(NULL) - MCUMGR_OVERHEAD;
-	if (adjusted_mtu <= 0) {
+	if (chunk_size <= 0) {
 		return MGMT_ERR_TRANSPORT;
 	}
-#else
-	adjusted_mtu = 300;
-#endif
 
 	if (name == NULL || data == NULL || size == 0 || offset == NULL || *offset > size) {
 		return MGMT_ERR_EINVAL;
@@ -449,10 +466,12 @@ int fs_mgmt_client_upload(struct zephyr_smp_transport *transport, const char *na
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
 	fs_ctx.size = size;
-	fs_ctx.chunk_size = MIN(size, adjusted_mtu);
+	fs_ctx.chunk_size = MIN(size, chunk_size);
 	fs_ctx.name = name;
 	fs_ctx.data = (uint8_t *)data;
 	fs_ctx.local_name = NULL;
+
+	LOG_DBG("Chunk size: %d", fs_ctx.chunk_size);
 
 	r = upload(transport);
 
@@ -465,11 +484,10 @@ int fs_mgmt_client_upload_file(struct zephyr_smp_transport *transport, const cha
 			       const char *local_name, size_t *offset)
 {
 	int r;
-	int adjusted_mtu;
 	size_t size;
+	int chunk_size = get_chunk_size(transport);
 
-	adjusted_mtu = transport->zst_get_mtu(NULL) - MCUMGR_OVERHEAD;
-	if (adjusted_mtu <= 0) {
+	if (chunk_size <= 0) {
 		return MGMT_ERR_TRANSPORT;
 	}
 
@@ -495,7 +513,7 @@ int fs_mgmt_client_upload_file(struct zephyr_smp_transport *transport, const cha
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
 	fs_ctx.size = size;
-	fs_ctx.chunk_size = MIN(size, adjusted_mtu);
+	fs_ctx.chunk_size = MIN(size, chunk_size);
 	fs_ctx.name = name;
 	fs_ctx.data = 0;
 	fs_ctx.local_name = local_name;

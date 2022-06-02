@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <logging/log.h>
-LOG_MODULE_REGISTER(fs_mgmt, CONFIG_MCUMGR_CMD_FS_LOG_LEVEL);
+LOG_MODULE_REGISTER(mcumgr_cmd_fs, CONFIG_MCUMGR_CMD_FS_LOG_LEVEL);
 
 #include <limits.h>
 #include <string.h>
 #include <sys/util.h>
+#include <sys/printk.h>
 #include "cborattr/cborattr.h"
 #include "mgmt/mgmt.h"
 #include "fs_mgmt/fs_mgmt.h"
@@ -199,6 +200,18 @@ fs_mgmt_file_upload(struct mgmt_ctxt *ctxt)
 	if (new_off > fs_mgmt_ctxt.len) {
 		/* Data exceeds image length. */
 		return MGMT_ERR_EINVAL;
+	}
+
+	if (IS_ENABLED(CONFIG_MCUMGR_FS_LOG_VERBOSE)) {
+		int i;
+		printk("off: %llu len: %u\r\n", off, data_len);
+		for (i = 0; i < data_len; i++) {
+			printk("%02x ", file_data[i]);
+			if ((i % 16) == 0) {
+				printk("\r\n");
+			}
+		}
+		printk("\r\n");
 	}
 
 	if (data_len > 0) {

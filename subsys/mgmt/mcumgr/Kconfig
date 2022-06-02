@@ -46,10 +46,15 @@ menuconfig MCUMGR_CLIENT_FS_MGMT
 
 if MCUMGR_CLIENT_FS_MGMT
 module=MCUMGR_CLIENT_FS
-module-dep=LOG
 module-str=MCUMGR_CLIENT_FS
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
 endif
+
+config MCUMGR_FS_LOG_VERBOSE
+	bool "Enable verbose printing of file system command data"
+	depends on PRINTK
+	help
+	  LOG2 not working for large strings
 
 menuconfig MCUMGR_CMD_FS_MGMT
 	bool "Enable mcumgr handlers for file management (insecure)"
@@ -64,7 +69,6 @@ menuconfig MCUMGR_CMD_FS_MGMT
 
 if MCUMGR_CMD_FS_MGMT
 module=MCUMGR_CMD_FS
-module-dep=LOG
 module-str=MCUMGR_CMD_FS
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
 endif
