@@ -12,6 +12,7 @@ LOG_MODULE_REGISTER(mcumgr_client_fs, CONFIG_MCUMGR_CLIENT_FS_LOG_LEVEL);
 /**************************************************************************************************/
 /* Includes                                                                                       */
 /**************************************************************************************************/
+#include <zephyr.h>
 #include <init.h>
 #include <sys/printk.h>
 #include <mgmt/endian.h>
@@ -430,7 +431,7 @@ int fs_mgmt_client_download_file(struct zephyr_smp_transport *transport, const c
 	fs_ctx.first_chunk = true;
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
-	fs_ctx.size = *size;
+	fs_ctx.size = (*size == 0) ? SIZE_MAX : *size;
 	fs_ctx.name = remote_name;
 	fs_ctx.data = 0;
 	fs_ctx.local_name = local_name;

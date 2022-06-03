@@ -34,7 +34,7 @@ int fs_mgmt_client_download(struct zephyr_smp_transport *transport, const char *
  * @param transport to send message on
  * @param remote_name of file to read from mgmt server
  * @param local_name of file to write
- * @param size max size of data (input), actual size of data (output)
+ * @param size max size of data (input), if zero, then no limit; actual size of data (output)
  * @param offset offset into file to start, offset into file when done
  * @return int 0 on success, MGMT_ERR_[...] code on failure
  */
