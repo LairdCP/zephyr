@@ -311,9 +311,9 @@ int32_t mdm_hl7800_send_at_cmd(const uint8_t *data);
  * If CONFIG_MODEM_HL7800_RSSI_RATE_SECONDS is 0, then this
  * may cause the modem to be woken so that the values can be queried.
  *
- * @param rsrp Reference Signals Received Power (dBm)
+ * @param rsrp [If not NULL] Reference Signals Received Power (dBm)
  *             Range = -140 dBm to -44 dBm
- * @param sinr Signal to Interference plus Noise Ratio (dBm)
+ * @param sinr [If not NULL] Signal to Interference plus Noise Ratio (dBm)
  *             Range = -128 dBm to 40dBm
  */
 void mdm_hl7800_get_signal_quality(int *rsrp, int *sinr);

@@ -973,8 +973,13 @@ void mdm_hl7800_get_signal_quality(int *rsrp, int *sinr)
 		rssi_query();
 	}
 
-	*rsrp = ictx.mdm_rssi;
-	*sinr = ictx.mdm_sinr;
+	if (rsrp != NULL) {
+		*rsrp = ictx.mdm_rssi;
+	}
+
+	if (sinr != NULL) {
+		*sinr = ictx.mdm_sinr;
+	}
 }
 
 void mdm_hl7800_wakeup(bool wakeup)
