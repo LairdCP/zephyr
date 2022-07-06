@@ -248,8 +248,6 @@ static const struct mdm_control_pinconfig pinconfig[] = {
 #define MDM_SOCK_NOTIF_DELAY K_MSEC(150)
 #define MDM_CMD_CONN_TIMEOUT K_SECONDS(31)
 
-#define MDM_MAX_DATA_LENGTH 1500
-#define MDM_MTU 1500
 #define MDM_MAX_RESP_SIZE 128
 #define MDM_IP_INFO_RESP_SIZE 256
 
@@ -404,7 +402,7 @@ static const char TIME_STRING_FORMAT[] = "\"yy/MM/dd,hh:mm:ss?zz\"";
 NET_BUF_POOL_DEFINE(mdm_recv_pool, CONFIG_MODEM_HL7800_RECV_BUF_CNT,
 		    CONFIG_MODEM_HL7800_RECV_BUF_SIZE, 0, NULL);
 
-static uint8_t mdm_recv_buf[MDM_MAX_DATA_LENGTH];
+static uint8_t mdm_recv_buf[CONFIG_MODEM_HL7800_MAX_DATA_LENGTH];
 
 static K_SEM_DEFINE(hl7800_RX_lock_sem, 1, 1);
 static K_SEM_DEFINE(hl7800_TX_lock_sem, 1, 1);
@@ -6450,4 +6448,4 @@ static struct net_if_api api_funcs = {
 
 NET_DEVICE_DT_INST_OFFLOAD_DEFINE(0, hl7800_init, NULL, &ictx,
 				  NULL, CONFIG_MODEM_HL7800_INIT_PRIORITY,
-				  &api_funcs, MDM_MTU);
+				  &api_funcs, CONFIG_MODEM_HL7800_MTU);

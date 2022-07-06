@@ -370,4 +370,12 @@ config MODEM_HL7800_CTS_FILTER_MAX_ITERATIONS
 	int "Maximum filter loops"
 	default 5
 
+config MODEM_HL7800_MTU
+	int "MTU value provided to net offload"
+	default 1500
+
+config MODEM_HL7800_MAX_DATA_LENGTH
+	int "Size of modem receiver ring buffer"
+	default 1564
+
 endif # MODEM_HL7800
