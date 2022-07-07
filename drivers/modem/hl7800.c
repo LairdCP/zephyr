@@ -359,6 +359,8 @@ static const char TIME_STRING_FORMAT[] = "\"yy/MM/dd,hh:mm:ss?zz\"";
 #define QUARTER_HOUR_RANGE 0, 96
 #define SECONDS_PER_QUARTER_HOUR (15 * 60)
 
+#define GET_GPS_STATE_TIMEOUT_SECONDS 2
+
 #define SEND_AT_CMD_ONCE_EXPECT_OK(c)                                          \
 	do {                                                                   \
 		ret = send_at_cmd(NULL, (c), MDM_CMD_SEND_TIMEOUT, 0, false);  \
@@ -570,6 +572,7 @@ struct hl7800_iface_ctx {
 	struct k_work_delayable gps_work;
 	uint32_t gps_query_location_rate_seconds;
 	bool gps_running;
+	struct k_sem gps_state;
 #endif
 };
 
@@ -1252,15 +1255,19 @@ int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 	wakeup_hl7800();
 	ictx.gps_query_location_rate_seconds = rate;
 
-	/* Default to true because it is better to have an error
-	 * message from an unnecessary stop than the inability to set new value.
-	 */
-	ictx.gps_running = true;
+	k_sem_reset(&ictx.gps_state);
 	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
+	if (k_sem_take(&ictx.gps_state, K_SECONDS(GET_GPS_STATE_TIMEOUT_SECONDS)) != 0) {
+		LOG_WRN("Get GPS state timeout");
+		ret = -ETIMEDOUT;
+		goto error;
+	}
 
-	/* Stopping first allows changing the rate between two non-zero values. */
+	/* Stop so that all GPS config commands can be sent without error.
+	 * If shell is enabled, then configuration isn't guaranteed.
+	 */
 	if (ictx.gps_running) {
-		SEND_AT_CMD_IGNORE_ERROR("AT+GNSSSTOP");
+		SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP");
 	}
 
 	if (rate == 0) {
@@ -1280,7 +1287,10 @@ int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 		SEND_AT_CMD_EXPECT_OK("AT+GNSSSTART=0");
 	}
 
+	/* Update the state (for debug) */
+	k_sem_reset(&ictx.gps_state);
 	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
+	k_sem_take(&ictx.gps_state, K_SECONDS(GET_GPS_STATE_TIMEOUT_SECONDS));
 
 error:
 	if (rate && ret == 0) {
@@ -3002,6 +3012,7 @@ static bool on_cmd_gps_status(struct net_buf **buf, uint16_t len)
 	gps_str[out_len] = 0;
 
 	ictx.gps_running = (strstr(gps_str, "0") != NULL);
+	k_sem_give(&ictx.gps_state);
 
 	LOG_INF("GPS %s", ictx.gps_running ? "running" : "stopped");
 
@@ -6282,6 +6293,7 @@ static int hl7800_init(const struct device *dev)
 
 #ifdef CONFIG_MODEM_HL7800_GPS
 	k_work_init_delayable(&ictx.gps_work, gps_work_callback);
+	k_sem_init(&ictx.gps_state, 0, 1);
 #endif
 
 #ifdef CONFIG_MODEM_HL7800_FW_UPDATE
