@@ -402,7 +402,7 @@ mgmt_get_string_err(int err)
 	case MGMT_ERR_EBADSTATE:
 		return "Current state disallows command";
 	case MGMT_ERR_EMSGSIZE:
-		return "Message too large for transport";
+		return "Message too large";
 	case MGMT_ERR_ENOTSUP:
 		return "Command not supported";
 	case MGMT_ERR_ECORRUPT:

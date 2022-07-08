@@ -187,8 +187,9 @@ zephyr_smp_tx(struct smp_streamer *ns, void *rsp, void *arg)
 			break;
 		}
 
-		if (nb->len > mtu) {
-			/* The size of the message is too large for the transport. */
+		/* This value should be obtained during runtime */
+		if (nb->len > CONFIG_MCUMGR_BUF_SIZE) {
+			/* The size of the message is too large. */
 			mgmt_err = MGMT_ERR_EMSGSIZE;
 			break;
 		}
