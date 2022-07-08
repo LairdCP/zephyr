@@ -121,7 +121,7 @@ static void os_mgmt_event_callback(uint8_t event, const struct mgmt_hdr *hdr, vo
 
 	if (event == MGMT_EVT_OP_CLIENT_DONE) {
 		if (hdr->nh_seq != os_client_context.sequence) {
-			LOG_ERR("Unexpected sequence");
+			LOG_DBG("Unexpected sequence");
 		}
 
 		os_client_context.status =

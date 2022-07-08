@@ -221,7 +221,7 @@ static void fs_mgmt_event_callback(uint8_t event, const struct mgmt_hdr *hdr, vo
 
 	if (event == MGMT_EVT_OP_CLIENT_DONE) {
 		if (hdr->nh_seq != fs_ctx.sequence) {
-			LOG_ERR("Unexpected sequence");
+			LOG_DBG("Unexpected sequence");
 		}
 
 		fs_ctx.status =
