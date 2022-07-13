@@ -48,6 +48,13 @@ if MCUMGR_CLIENT_FS_MGMT
 module=MCUMGR_CLIENT_FS
 module-str=MCUMGR_CLIENT_FS
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+
+config FS_CMD_TIMEOUT
+	int "Amount of time in milliseconds to wait for a response"
+	default 5000
+	help
+	  Ideally this would be read from transport.
+
 endif
 
 config MCUMGR_FS_LOG_VERBOSE

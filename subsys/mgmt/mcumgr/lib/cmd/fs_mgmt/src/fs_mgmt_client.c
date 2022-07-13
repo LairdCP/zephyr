@@ -41,11 +41,6 @@ static void fs_mgmt_event_callback(uint8_t event, const struct mgmt_hdr *hdr, vo
 /**************************************************************************************************/
 #define MCUMGR_OVERHEAD (CBOR_AND_OTHER_HDR + 32)
 
-/* Should be read from transport, but
- * if client is busy or slow to write fs then it shouldn't timeout either.
- */
-#define CONFIG_FS_CMD_TIMEOUT_MS 3000
-
 #define BUILD_NETWORK_HEADER(op, len, id) SET_NETWORK_HEADER(op, len, MGMT_GROUP_ID_FS, id)
 
 /* clang-format off */
@@ -256,7 +251,7 @@ static int download_chunk(struct zephyr_smp_transport *transport)
 
 static int wait_for_response(void)
 {
-	if (k_sem_take(&fs_ctx.busy, K_MSEC(CONFIG_FS_CMD_TIMEOUT_MS)) != 0) {
+	if (k_sem_take(&fs_ctx.busy, K_MSEC(CONFIG_FS_CMD_TIMEOUT)) != 0) {
 		LOG_ERR("FS Response timeout");
 		fs_ctx.status = MGMT_ERR_ETIMEOUT;
 	}
