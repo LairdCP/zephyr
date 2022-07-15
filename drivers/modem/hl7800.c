@@ -389,7 +389,7 @@ static const char TIME_STRING_FORMAT[] = "\"yy/MM/dd,hh:mm:ss?zz\"";
 	} while (0)
 
 /* Complex has "no_id_resp" set to true because the sending command
- * is the command used to process the respone
+ * is the command used to process the response
  */
 #define SEND_COMPLEX_AT_CMD(c)                                                 \
 	do {                                                                   \
@@ -571,7 +571,7 @@ struct hl7800_iface_ctx {
 #ifdef CONFIG_MODEM_HL7800_GPS
 	struct k_work_delayable gps_work;
 	uint32_t gps_query_location_rate_seconds;
-	bool gps_running;
+	bool gps_running; /* State of last query may not reflect current state */
 	struct k_sem gps_state;
 #endif
 };
@@ -1247,6 +1247,113 @@ int32_t mdm_hl7800_set_functionality(enum mdm_hl7800_functionality mode)
 }
 
 #ifdef CONFIG_MODEM_HL7800_GPS
+
+static int is_gps_running(void)
+{
+	int ret;
+
+	k_sem_reset(&ictx.gps_state);
+	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
+	if (k_sem_take(&ictx.gps_state, K_SECONDS(GET_GPS_STATE_TIMEOUT_SECONDS)) != 0) {
+		LOG_WRN("Get GPS state timeout");
+		ret = -ETIMEDOUT;
+	} else {
+		ret = ictx.gps_running ? 1 : 0;
+	}
+
+error:
+	return ret;
+}
+
+static int gps_configure(void)
+{
+	int ret;
+
+	SEND_AT_CMD_EXPECT_OK("AT+GNSSCONF=1,1");
+
+	if (IS_ENABLED(CONFIG_MODEM_HL7800_USE_GLONASS)) {
+		SEND_AT_CMD_EXPECT_OK("AT+GNSSCONF=10,1");
+	}
+
+	/* Enable all NMEA sentences */
+	SEND_AT_CMD_EXPECT_OK("AT+GNSSNMEA=0,1000,0,1FF");
+
+error:
+	return ret;
+}
+
+int mdm_hl7800_gps_query(void)
+{
+	int ret;
+
+	hl7800_lock();
+	wakeup_hl7800();
+	ret = send_at_cmd(NULL, "AT+GNSSLOC?", MDM_CMD_SEND_TIMEOUT, 1, false);
+	allow_sleep(true);
+	hl7800_unlock();
+
+	LOG_DBG("GPS location request status: %d", ret);
+
+	return ret;
+}
+
+int mdm_hl7800_is_gps_running(void)
+{
+	int ret;
+
+	hl7800_lock();
+	wakeup_hl7800();
+	ret = is_gps_running();
+	allow_sleep(true);
+	hl7800_unlock();
+
+	return ret;
+}
+
+int mdm_hl7800_gps_configure(void)
+{
+	int ret;
+
+	hl7800_lock();
+	wakeup_hl7800();
+	ret = gps_configure();
+	allow_sleep(true);
+	hl7800_unlock();
+
+	return ret;
+}
+
+int mdm_hl7800_gps_start(void)
+{
+	int ret;
+
+	hl7800_lock();
+	wakeup_hl7800();
+	/* Sending start when it is already running doesn't result in an error */
+	ret = send_at_cmd(NULL, "AT+GNSSSTART=0", MDM_CMD_SEND_TIMEOUT, 0, false);
+	allow_sleep(true);
+	hl7800_unlock();
+
+	return ret;
+}
+
+int mdm_hl7800_gps_stop(void)
+{
+	int ret;
+
+	hl7800_lock();
+	wakeup_hl7800();
+	/* If it isn't running, then don't try to stop it */
+	ret = is_gps_running();
+	if (ret > 0) {
+		ret = send_at_cmd(NULL, "AT+GNSSSTOP", MDM_CMD_SEND_TIMEOUT, 0, false);
+	}
+	allow_sleep(true);
+	hl7800_unlock();
+
+	return ret;
+}
+
 int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 {
 	int ret = -1;
@@ -1255,18 +1362,12 @@ int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 	wakeup_hl7800();
 	ictx.gps_query_location_rate_seconds = rate;
 
-	k_sem_reset(&ictx.gps_state);
-	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
-	if (k_sem_take(&ictx.gps_state, K_SECONDS(GET_GPS_STATE_TIMEOUT_SECONDS)) != 0) {
-		LOG_WRN("Get GPS state timeout");
-		ret = -ETIMEDOUT;
+	ret = is_gps_running();
+	if (ret < 0 ) {
 		goto error;
 	}
-
-	/* Stop so that all GPS config commands can be sent without error.
-	 * If shell is enabled, then configuration isn't guaranteed.
-	 */
-	if (ictx.gps_running) {
+	/* Stop so that all GPS config commands can be sent without error. */
+	else if (ret > 0) {
 		SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP");
 	}
 
@@ -1276,21 +1377,14 @@ int32_t mdm_hl7800_set_gps_rate(uint32_t rate)
 		/* Navigation doesn't work when LTE is on. */
 		SEND_AT_CMD_EXPECT_OK("AT+CFUN=4,0");
 
-		SEND_AT_CMD_EXPECT_OK("AT+GNSSCONF=1,1");
-
-		if (IS_ENABLED(CONFIG_MODEM_HL7800_USE_GLONASS)) {
-			SEND_AT_CMD_EXPECT_OK("AT+GNSSCONF=10,1");
+		ret = gps_configure();
+		if (ret < 0) {
+			goto error;
 		}
-		/* Enable all NMEA sentences */
-		SEND_AT_CMD_EXPECT_OK("AT+GNSSNMEA=0,1000,0,1FF");
+
 		/* Enable GPS */
 		SEND_AT_CMD_EXPECT_OK("AT+GNSSSTART=0");
 	}
-
-	/* Update the state (for debug) */
-	k_sem_reset(&ictx.gps_state);
-	SEND_AT_CMD_EXPECT_OK("AT+GNSSSTOP?");
-	k_sem_take(&ictx.gps_state, K_SECONDS(GET_GPS_STATE_TIMEOUT_SECONDS));
 
 error:
 	if (rate && ret == 0) {
@@ -2860,13 +2954,7 @@ static void gps_work_callback(struct k_work *work)
 	ARG_UNUSED(work);
 	int r;
 
-	hl7800_lock();
-	wakeup_hl7800();
-	r = send_at_cmd(NULL, "AT+GNSSLOC?", MDM_CMD_SEND_TIMEOUT, 1, false);
-	allow_sleep(true);
-	hl7800_unlock();
-
-	LOG_DBG("GPS location request status: %d", r);
+	r = mdm_hl7800_gps_query();
 
 	if (ictx.gps_query_location_rate_seconds) {
 		k_work_reschedule_for_queue(&hl7800_workq, &ictx.gps_work,

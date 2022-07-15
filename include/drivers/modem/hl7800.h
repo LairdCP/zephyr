@@ -442,6 +442,46 @@ int32_t mdm_hl7800_set_functionality(enum mdm_hl7800_functionality mode);
 int32_t mdm_hl7800_set_gps_rate(uint32_t rate);
 
 /**
+ * @brief Request location information from HL7800. Requires GPS to be running.
+ * Monitor GPS events for status.
+ *
+ * @return int negative error code, 0 on success
+ */
+int mdm_hl7800_gps_query(void);
+
+/**
+ * @brief Accessor
+ *
+ * @return int negative error code, 0 if not running, 1 if running
+ */
+int mdm_hl7800_is_gps_running(void);
+
+/**
+ * @brief Configure GPS.  This command will fail if GPS is running.
+ *
+ * @return int negative error code, 0 on success
+ */
+int mdm_hl7800_gps_configure(void);
+
+/**
+ * @brief Start GPS. Doesn't change radio mode. Can be used in eDRX mode.
+ *
+ * @note Active GPS is ~60 mA @ 3.6V.  GPS query can be issued periodically
+ * or the user can wait for a 3D fix event.  If the LTE radio is active when
+ * this function is called, then starting GPS can fail.
+ *
+ * @return int negative error code, 0 on success.
+ */
+int mdm_hl7800_gps_start(void);
+
+/**
+ * @brief Stop GPS.
+ *
+ * @return int negative error code, 0 on success.
+ */
+int mdm_hl7800_gps_stop(void);
+
+/**
  * @brief Register modem/SIM with polte.io
  *
  * @note It takes around 30 seconds for HL7800_EVENT_POLTE_REGISTRATION to
@@ -546,7 +586,7 @@ void mdm_hl7800_register_cts_callback(void (*func)(int state));
  * @brief Set the bands available for the LTE connection
  *
  * @param bands Band bitmap in hexadecimal format without the 0x prefix.
- * Leading 0's for the value can be ommited.
+ * Leading 0's for the value can be omitted.
  *
  * @return int32_t negative errno, 0 on success
  */
