@@ -574,6 +574,7 @@ struct hl7800_iface_ctx {
 	enum mdm_hl7800_sleep sleep_state;
 	enum hl7800_lpm low_power_mode;
 	enum mdm_hl7800_network_state network_state;
+	bool network_dropped;
 	enum net_operator_status operator_status;
 	struct tm local_time;
 	int32_t local_time_offset;
@@ -3458,6 +3459,7 @@ static void iface_status_work_cb(struct k_work *work)
 {
 	int ret;
 	hl7800_lock();
+	enum mdm_hl7800_network_state state;
 
 	if (!ictx.initialized && ictx.restarting) {
 		LOG_DBG("Wait for driver init, process network state later");
@@ -3487,6 +3489,15 @@ static void iface_status_work_cb(struct k_work *work)
 
 	LOG_DBG("Updating network state...");
 
+	state = ictx.network_state;
+	/* Ensure we bring the network interface down and then re-check the current state */
+	if (ictx.network_dropped) {
+		ictx.network_dropped = false;
+		state = HL7800_OUT_OF_COVERAGE;
+		k_work_reschedule_for_queue(&hl7800_workq, &ictx.iface_status_work,
+					    IFACE_WORK_DELAY);
+	}
+
 	/* Query operator selection */
 	ret = send_at_cmd(NULL, "AT+COPS?", MDM_CMD_SEND_TIMEOUT, 0, false);
 	if (ret < 0) {
@@ -3494,7 +3505,7 @@ static void iface_status_work_cb(struct k_work *work)
 	}
 
 	/* bring iface up/down */
-	switch (ictx.network_state) {
+	switch (state) {
 	case HL7800_HOME_NETWORK:
 	case HL7800_ROAMING:
 		if (ictx.iface && !net_if_is_up(ictx.iface)) {
@@ -3513,8 +3524,7 @@ static void iface_status_work_cb(struct k_work *work)
 	}
 
 	if ((ictx.iface && !net_if_is_up(ictx.iface)) ||
-	    (ictx.low_power_mode == HL7800_LPM_PSM &&
-	     ictx.network_state == HL7800_OUT_OF_COVERAGE)) {
+	    (ictx.low_power_mode == HL7800_LPM_PSM && state == HL7800_OUT_OF_COVERAGE)) {
 		hl7800_stop_rssi_work();
 		notify_all_tcp_sockets_closed();
 	} else if (ictx.iface && net_if_is_up(ictx.iface)) {
@@ -3549,6 +3559,10 @@ static char *get_network_state_string(enum mdm_hl7800_network_state state)
 
 static void set_network_state(enum mdm_hl7800_network_state state)
 {
+	if ((ictx.network_state == HL7800_HOME_NETWORK || ictx.network_state == HL7800_ROAMING) &&
+	    state == HL7800_OUT_OF_COVERAGE) {
+		ictx.network_dropped = true;
+	}
 	ictx.network_state = state;
 	generate_network_state_event();
 }
