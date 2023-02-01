@@ -526,6 +526,7 @@ struct hl7800_iface_ctx {
 	struct k_work_delayable mdm_reset_work;
 	struct k_work_delayable allow_sleep_work;
 	struct k_work_delayable delete_untracked_socket_work;
+	struct k_work mdm_pwr_off_work;
 
 #ifdef CONFIG_MODEM_HL7800_FW_UPDATE
 	/* firmware update */
@@ -581,6 +582,7 @@ struct hl7800_iface_ctx {
 	int32_t local_time_offset;
 	bool local_time_valid;
 	bool configured;
+	bool off;
 	void (*wake_up_callback)(int state);
 	void (*gpio6_callback)(int state);
 	void (*cts_callback)(int state);
@@ -617,6 +619,7 @@ static void generate_sleep_state_event(void);
 static int modem_boot_handler(char *reason);
 static void mdm_vgpio_work_cb(struct k_work *item);
 static void mdm_reset_work_callback(struct k_work *item);
+static void mdm_power_off_work_callback(struct k_work *item);
 static int write_apn(char *access_point_name);
 #ifdef CONFIG_MODEM_HL7800_LOW_POWER_MODE
 static void mark_sockets_for_reconfig(void);
@@ -3479,15 +3482,16 @@ static void iface_status_work_cb(struct k_work *work)
 	hl7800_lock();
 	enum mdm_hl7800_network_state state;
 
-	if (!ictx.initialized && ictx.restarting) {
+	if (ictx.off) {
+		goto done;
+	} else if (!ictx.initialized && ictx.restarting) {
 		LOG_DBG("Wait for driver init, process network state later");
 		/* we are not ready to process this yet, try again later */
 		k_work_reschedule_for_queue(&hl7800_workq,
 					    &ictx.iface_status_work,
 					    IFACE_WORK_DELAY);
 		goto done;
-	} else if (ictx.wait_for_KSUP &&
-		   ictx.wait_for_KSUP_tries < WAIT_FOR_KSUP_RETRIES) {
+	} else if (ictx.wait_for_KSUP && ictx.wait_for_KSUP_tries < WAIT_FOR_KSUP_RETRIES) {
 		LOG_DBG("Wait for +KSUP before updating network state");
 		ictx.wait_for_KSUP_tries++;
 		/* we have not received +KSUP yet, lets wait more time to receive +KSUP */
@@ -3495,8 +3499,7 @@ static void iface_status_work_cb(struct k_work *work)
 					    &ictx.iface_status_work,
 					    IFACE_WORK_DELAY);
 		goto done;
-	} else if (ictx.wait_for_KSUP &&
-		   ictx.wait_for_KSUP_tries >= WAIT_FOR_KSUP_RETRIES) {
+	} else if (ictx.wait_for_KSUP && ictx.wait_for_KSUP_tries >= WAIT_FOR_KSUP_RETRIES) {
 		/* give up waiting for KSUP */
 		LOG_DBG("Give up waiting for");
 		ictx.wait_for_KSUP = false;
@@ -5047,12 +5050,13 @@ static void shutdown_uart(void)
 	if (ictx.uart_on) {
 		HL7800_IO_DBG_LOG("Power OFF the UART");
 		uart_irq_rx_disable(ictx.mdm_ctx.uart_dev);
-		rc = pm_device_action_run(ictx.mdm_ctx.uart_dev,
-					 PM_DEVICE_ACTION_SUSPEND);
+		rc = pm_device_action_run(ictx.mdm_ctx.uart_dev, PM_DEVICE_ACTION_SUSPEND);
 		if (rc) {
 			LOG_ERR("Error disabling UART peripheral (%d)", rc);
+			uart_irq_rx_enable(ictx.mdm_ctx.uart_dev);
+		} else {
+			ictx.uart_on = false;
 		}
-		ictx.uart_on = false;
 	}
 #endif
 }
@@ -5064,13 +5068,14 @@ static void power_on_uart(void)
 
 	if (!ictx.uart_on) {
 		HL7800_IO_DBG_LOG("Power ON the UART");
-		rc = pm_device_action_run(ictx.mdm_ctx.uart_dev,
-					 PM_DEVICE_ACTION_RESUME);
+		rc = pm_device_action_run(ictx.mdm_ctx.uart_dev, PM_DEVICE_ACTION_RESUME);
 		if (rc) {
 			LOG_ERR("Error enabling UART peripheral (%d)", rc);
+			uart_irq_rx_disable(ictx.mdm_ctx.uart_dev);
+		} else {
+			uart_irq_rx_enable(ictx.mdm_ctx.uart_dev);
+			ictx.uart_on = true;
 		}
-		uart_irq_rx_enable(ictx.mdm_ctx.uart_dev);
-		ictx.uart_on = true;
 	}
 #endif
 }
@@ -5121,6 +5126,9 @@ void mdm_vgpio_callback_isr(const struct device *port, struct gpio_callback *cb,
 		}
 		check_hl7800_awake();
 	} else {
+		if (ictx.off) {
+			return;
+		}
 		/* The peripheral must be enabled in ISR context
 		 * because the driver may be
 		 * waiting for +KSUP or waiting to send commands.
@@ -5179,6 +5187,9 @@ void mdm_gpio6_callback_isr(const struct device *port, struct gpio_callback *cb,
 		mark_sockets_for_reconfig();
 		/* TODO: may need to indicate all TCP connections lost here */
 	} else {
+		if (ictx.off) {
+			return;
+		}
 		power_on_uart();
 	}
 
@@ -5257,6 +5268,9 @@ void mdm_uart_cts_callback(const struct device *port, struct gpio_callback *cb, 
 			}
 		}
 	} else {
+		if (ictx.off) {
+			return;
+		}
 		if (ictx.desired_sleep_level != HL7800_SLEEP_HIBERNATE) {
 			power_on_uart();
 			if (ictx.sleep_state == HL7800_SLEEP_SLEEP) {
@@ -5298,6 +5312,7 @@ static void modem_reset(void)
 	}
 #endif
 	k_sem_reset(&ictx.mdm_awake);
+	ictx.off = true;
 }
 
 static void modem_run(void)
@@ -5306,6 +5321,7 @@ static void modem_run(void)
 	gpio_pin_set(ictx.gpio_port_dev[MDM_RESET], pinconfig[MDM_RESET].pin,
 		     MDM_RESET_NOT_ASSERTED);
 	k_sleep(MDM_RESET_HIGH_TIME);
+	ictx.off = false;
 	allow_sleep(false);
 }
 
@@ -5861,28 +5877,53 @@ int32_t mdm_hl7800_reset(void)
 	return ret;
 }
 
-static int hl7800_power_off(void)
+static void mdm_power_off_work_callback(struct k_work *item)
 {
-	int ret = 0;
+	ARG_UNUSED(item);
+	int ret;
+#if defined(CONFIG_DNS_RESOLVER)
+	struct dns_resolve_context *dnsCtx;
 
-	LOG_INF("Powering off modem");
-	wakeup_hl7800();
-	hl7800_stop_rssi_work();
+	LOG_DBG("Shutdown DNS resolver");
+	dnsCtx = dns_resolve_get_default();
+	(void)dns_resolve_close(dnsCtx);
+	ictx.dns_ready = false;
+#endif
 
-	/* use the restarting flag to prevent +CEREG updates */
-	ictx.restarting = true;
+	hl7800_lock();
+
+	notify_all_tcp_sockets_closed();
 
 	ret = send_at_cmd(NULL, "AT+CPOF", MDM_CMD_SEND_TIMEOUT, 1, false);
 	if (ret) {
 		LOG_ERR("AT+CPOF ret:%d", ret);
-		return ret;
+		return;
 	}
+	prepare_io_for_reset();
+	ictx.configured = false;
+	ictx.off = true;
 	/* bring the iface down */
 	if (ictx.iface && net_if_is_up(ictx.iface)) {
 		net_if_down(ictx.iface);
 	}
 	LOG_INF("Modem powered off");
-	return ret;
+
+	hl7800_unlock();
+}
+
+static int hl7800_power_off(void)
+{
+	LOG_INF("Powering off modem");
+	wakeup_hl7800();
+	hl7800_stop_rssi_work();
+	k_work_cancel_delayable(&ictx.iface_status_work);
+	k_work_cancel_delayable(&ictx.dns_work);
+	k_work_cancel_delayable(&ictx.mdm_reset_work);
+	k_work_cancel_delayable(&ictx.allow_sleep_work);
+	k_work_cancel_delayable(&ictx.delete_untracked_socket_work);
+	(void)k_work_submit_to_queue(&hl7800_workq, &ictx.mdm_pwr_off_work);
+
+	return 0;
 }
 
 int32_t mdm_hl7800_power_off(void)
@@ -6557,6 +6598,7 @@ static int hl7800_init(const struct device *dev)
 	k_work_init_delayable(&ictx.allow_sleep_work,
 			      allow_sleep_work_callback);
 	k_work_init_delayable(&ictx.delete_untracked_socket_work, delete_untracked_socket_work_cb);
+	k_work_init(&ictx.mdm_pwr_off_work, mdm_power_off_work_callback);
 
 #ifdef CONFIG_MODEM_HL7800_GPS
 	k_work_init_delayable(&ictx.gps_work, gps_work_callback);
