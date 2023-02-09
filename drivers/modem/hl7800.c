@@ -2105,6 +2105,7 @@ static void dns_work_cb(struct k_work *work)
 #endif
 		NULL};
 
+#ifdef CONFIG_NET_IPV6
 	if (IS_ENABLED(CONFIG_NET_IPV6)) {
 		valid_address = net_ipaddr_parse(ictx.dns_v6_string, strlen(ictx.dns_v6_string),
 						 &temp_addr);
@@ -2114,7 +2115,9 @@ static void dns_work_cb(struct k_work *work)
 			valid_address = net_ipaddr_parse(ictx.dns_v6_string,
 							 strlen(ictx.dns_v6_string), &temp_addr);
 		}
-	} else {
+	} else
+#endif
+	{
 		valid_address = net_ipaddr_parse(ictx.dns_v4_string, strlen(ictx.dns_v4_string),
 						 &temp_addr);
 	}
