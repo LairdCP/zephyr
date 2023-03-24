@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 Laird Connectivity
+ * Copyright (c) 2020-2023 Laird Connectivity
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_MODEM_LOG_LEVEL);
 #include <zephyr/types.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
 #include <zephyr.h>
@@ -359,6 +360,21 @@ static const char TIME_STRING_FORMAT[] = "\"yy/MM/dd,hh:mm:ss?zz\"";
 #define SECONDS_PER_QUARTER_HOUR (15 * 60)
 
 #define GET_GPS_STATE_TIMEOUT_SECONDS 2
+
+/* Example GPS data from modem
+ *
+ * gps_latitude  '43 Deg 5 Min 26.09 Sec N'
+ * gps_longitude '87 Deg 57 Min 38.83 Sec W'
+ * gps_time      '2022 3 24 18:19:52'
+ * gps_fix_type  '3D'
+ */
+#define MAX_GPS_STR_SIZE 32
+#define TIME_FORMAT_STR "%u %u %u %u:%u:%u"
+#define TIME_FORMAT_STR_PARAM_COUNT 6
+#define LAT_LONG_FORMAT_STR "%u %*s %u %*s %f %*s %c"
+#define LAT_LONG_PARAM_COUNT 4
+#define TIME_FORMAT_STARTING_YEAR 1900
+#define TIME_FORMAT_MONTH_OFFSET 1
 
 #define SEND_AT_CMD_ONCE_EXPECT_OK(c)                                          \
 	do {                                                                   \
@@ -1295,12 +1311,17 @@ error:
 int mdm_hl7800_gps_query(void)
 {
 	int ret;
+	struct mdm_hl7800_compound_event event;
 
 	hl7800_lock();
 	wakeup_hl7800();
 	ret = send_at_cmd(NULL, "AT+GNSSLOC?", MDM_CMD_SEND_TIMEOUT, 1, false);
 	allow_sleep(true);
 	hl7800_unlock();
+
+	event.code = HL7800_GPS_STR_REQUEST_STATUS;
+	event.string = (ret == 0) ? "ok" : "fail";
+	event_handler(HL7800_EVENT_GPS, &event);
 
 	LOG_DBG("GPS location request status: %d", ret);
 
@@ -1409,6 +1430,67 @@ error:
 	hl7800_unlock();
 	return ret;
 }
+
+int mdm_hl7800_convert_gps_time(const char *time, int64_t *result)
+{
+	int r;
+	struct tm tm;
+
+	memset(&tm, 0, sizeof(tm));
+
+	r = sscanf(time, TIME_FORMAT_STR, &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour,
+		   &tm.tm_min, &tm.tm_sec);
+	if (r == TIME_FORMAT_STR_PARAM_COUNT) {
+		/* Subtract offsets before conversion */
+		tm.tm_year -= TIME_FORMAT_STARTING_YEAR;
+		tm.tm_mon -= TIME_FORMAT_MONTH_OFFSET;
+		*result = mktime(&tm);
+		LOG_DBG("Fix time as epoch %lld", *result);
+		r = 0;
+	} else {
+		r = -EINVAL;
+	}
+
+	return r;
+}
+
+static int convert_lat_long(const char *str, double *result, bool latitude)
+{
+	int r;
+	uint32_t deg;
+	uint32_t min;
+	float sec;
+	char direction;
+	float degrees;
+
+	const char negative_char = latitude ? 'S' : 'W';
+
+	r = sscanf(str, LAT_LONG_FORMAT_STR, &deg, &min, &sec, &direction);
+	if (r == LAT_LONG_PARAM_COUNT) {
+		degrees = (float)deg + (float)min / 60.0 + sec / 3600.0;
+		if (direction == negative_char) {
+			degrees *= -1;
+		}
+		*result = (double)degrees;
+
+		r = 0;
+	} else {
+		r = -EINVAL;
+	}
+
+	return r;
+}
+
+int mdm_hl7800_convert_latitude(const char *lat, double *result)
+{
+	return convert_lat_long(lat, result, true);
+}
+
+int mdm_hl7800_convert_longitude(const char *lon, double *result)
+{
+	return convert_lat_long(lon, result, false);
+}
+
 #endif /* CONFIG_MODEM_HL7800_GPS */
 
 #ifdef CONFIG_MODEM_HL7800_POLTE

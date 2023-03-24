@@ -37,14 +37,11 @@ extern "C" {
 #define MDM_HL7800_APN_PASSWORD_MAX_SIZE 65
 
 #define MDM_HL7800_APN_MAX_STRLEN (MDM_HL7800_APN_MAX_SIZE - 1)
-#define MDM_HL7800_APN_USERNAME_MAX_STRLEN                                     \
-	(MDM_HL7800_APN_USERNAME_MAX_SIZE - 1)
-#define MDM_HL7800_APN_PASSWORD_MAX_STRLEN                                     \
-	(MDM_HL7800_APN_PASSWORD_MAX_SIZE - 1)
+#define MDM_HL7800_APN_USERNAME_MAX_STRLEN (MDM_HL7800_APN_USERNAME_MAX_SIZE - 1)
+#define MDM_HL7800_APN_PASSWORD_MAX_STRLEN (MDM_HL7800_APN_PASSWORD_MAX_SIZE - 1)
 
-#define MDM_HL7800_APN_CMD_MAX_SIZE                                            \
-	(32 + MDM_HL7800_APN_USERNAME_MAX_STRLEN +                             \
-	 MDM_HL7800_APN_PASSWORD_MAX_STRLEN)
+#define MDM_HL7800_APN_CMD_MAX_SIZE                                                                \
+	(32 + MDM_HL7800_APN_USERNAME_MAX_STRLEN + MDM_HL7800_APN_PASSWORD_MAX_STRLEN)
 
 #define MDM_HL7800_APN_CMD_MAX_STRLEN (MDM_HL7800_APN_CMD_MAX_SIZE - 1)
 
@@ -65,8 +62,7 @@ struct mdm_hl7800_apn {
 #define MDM_HL7800_IMSI_MAX_STRLEN (MDM_HL7800_IMSI_MAX_STR_SIZE - 1)
 
 #define MDM_HL7800_MODEM_FUNCTIONALITY_SIZE 2
-#define MDM_HL7800_MODEM_FUNCTIONALITY_STRLEN                                  \
-	(MDM_HL7800_MODEM_FUNCTIONALITY_SIZE - 1)
+#define MDM_HL7800_MODEM_FUNCTIONALITY_STRLEN (MDM_HL7800_MODEM_FUNCTIONALITY_SIZE - 1)
 
 #define MDM_HL7800_MAX_GPS_STR_SIZE 33
 
@@ -203,7 +199,8 @@ enum mdm_hl7800_gps_string_types {
 	HL7800_GPS_STR_ALT_UNC,
 	HL7800_GPS_STR_DIRECTION,
 	HL7800_GPS_STR_HOR_SPEED,
-	HL7800_GPS_STR_VER_SPEED
+	HL7800_GPS_STR_VER_SPEED,
+	HL7800_GPS_STR_REQUEST_STATUS /* ok or fail */
 };
 
 /* status: negative errno, 0 on success
@@ -270,8 +267,7 @@ struct mdm_hl7800_edrx_parameters {
  * HL7800_EVENT_SITE_SURVEY mdm_hl7800_site_survey
  * HL7800_EVENT_EDRX_PARAMETERS mdm_hl7800_edrx_parameters
  */
-typedef void (*mdm_hl7800_event_callback_t)(enum mdm_hl7800_event event,
-					    void *event_data);
+typedef void (*mdm_hl7800_event_callback_t)(enum mdm_hl7800_event event, void *event_data);
 
 struct mdm_hl7800_callback_agent {
 	sys_snode_t node;
@@ -493,6 +489,27 @@ int mdm_hl7800_gps_start(void);
  * @return int negative error code, 0 on success.
  */
 int mdm_hl7800_gps_stop(void);
+
+/**
+ * @brief Convert time stirng into epoch in seconds from Jan 1, 1970
+ *
+ * return int negative error code, 0 on success.
+ */
+int mdm_hl7800_convert_gps_time(const char *time_str, int64_t *result);
+
+/**
+ * @brief Convert latitude string into decimal degrees
+ *
+ * return int negative error code, 0 on success.
+ */
+int mdm_hl7800_convert_latitude(const char *lat_str, double *result);
+
+/**
+ * @brief Convert longitude string into decimal degrees
+ *
+ * return int negative error code, 0 on success.
+ */
+int mdm_hl7800_convert_longitude(const char *lat_str, double *result);
 
 /**
  * @brief Register modem/SIM with polte.io
