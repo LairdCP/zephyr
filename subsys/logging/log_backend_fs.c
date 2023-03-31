@@ -486,3 +486,21 @@ static const struct log_backend_api log_backend_fs_api = {
 
 LOG_BACKEND_DEFINE(log_backend_fs, log_backend_fs_api, true);
 #endif
+
+int log_backend_fs_get_log_number(int offset)
+{
+	int r;
+
+	if (offset <= 0) {
+		r = newest;
+	} else if (offset >= CONFIG_LOG_BACKEND_FS_FILES_LIMIT || offset > file_ctr) {
+		r = oldest;
+	} else {
+		r = newest - offset;
+		if (r < 0) {
+			r += MAX_FILE_NUMERAL + 1;
+		}
+	}
+
+	return r;
+}
