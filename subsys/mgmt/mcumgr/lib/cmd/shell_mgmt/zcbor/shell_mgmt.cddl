@@ -1,0 +1,17 @@
+
+result_code = int
+
+shell_exec_cmd = {
+    "argv" : [args:* tstr]
+}
+
+shell_exec_rsp = {
+    "o" : (tstr),
+    "rc" : (result_code)
+}
+
+; It is easiest to treat error as its own message type
+; (vs making all elements optional)
+error_rsp = {
+    "rc" : (result_code),
+}

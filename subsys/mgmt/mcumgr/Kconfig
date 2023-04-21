@@ -176,6 +176,22 @@ config MCUMGR_CMD_SHELL_MGMT
 	  will be returned from command output, if your output gets cut, then
 	  increase the value. Remember to set MCUMGR_BUF_SIZE accordingly.
 
+menuconfig MCUMGR_CLIENT_SHELL_MGMT
+	bool "Enable mcumgr client for shell management"
+
+if MCUMGR_CLIENT_SHELL_MGMT
+module=MCUMGR_CLIENT_SHELL
+module-str=MCUMGR_CLIENT_SHELL
+source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
+
+config MCUMGR_CLIENT_SHELL_MGMT_CMD_TIMEOUT
+	int "Amount of time in milliseconds to wait for a response"
+	default 10000
+	help
+	  Ideally this would be read from transport.
+
+endif
+
 menuconfig MCUMGR_CMD_IMG_MGMT
 	bool "Enable mcumgr handlers for image management"
 	select FLASH
