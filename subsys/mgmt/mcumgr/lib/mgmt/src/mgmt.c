@@ -431,8 +431,10 @@ mgmt_get_string_err(int err)
 		return "Notification Receive Timeout";
 	case MGMT_ERR_NOTIFICATION_EXPECTED:
 		return "Notification Expected";
+	case MGMT_ERR_EPERUSER:
+		return "Per User";
 	default:
-		return "?";
+		return "Unknown management error code";
 	}
 }
 
