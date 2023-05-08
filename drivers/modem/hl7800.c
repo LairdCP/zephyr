@@ -5773,12 +5773,14 @@ reboot:
 	/* query modem serial number */
 	SEND_COMPLEX_AT_CMD("AT+KGSN=3");
 
-	/* query SIM ICCID */
-	SEND_AT_CMD_IGNORE_ERROR("AT+CCID?");
+	if (ictx.mdm_startup_state != HL7800_STARTUP_STATE_SIM_NOT_PRESENT) {
+		/* query SIM ICCID */
+		SEND_AT_CMD_IGNORE_ERROR("AT+CCID?");
 
-	/* query SIM IMSI */
-	(void)send_at_cmd(NULL, "AT+CIMI", MDM_CMD_SEND_TIMEOUT,
-			  MDM_DEFAULT_AT_CMD_RETRIES, true);
+		/* query SIM IMSI */
+		(void)send_at_cmd(NULL, "AT+CIMI", MDM_CMD_SEND_TIMEOUT, MDM_DEFAULT_AT_CMD_RETRIES,
+				  true);
+	}
 
 	/* Query PDP context to get APN */
 	SEND_AT_CMD_EXPECT_OK("AT+CGDCONT?");
@@ -5796,7 +5798,7 @@ reboot:
 	}
 
 	/* Query PDP authentication context to get APN username/password.
-	 * Temporary Workaroud - Ignore error
+	 * Temporary Workaround - Ignore error
 	 * On some modules this is returning an error and the response data.
 	 */
 	SEND_AT_CMD_IGNORE_ERROR("AT+WPPP?");
@@ -6011,7 +6013,7 @@ static int connect_TCP_socket(struct hl7800_socket *sock)
 		goto done;
 	}
 	/* Now wait for +KTCP_IND or +KTCP_NOTIF to ensure
-	 * the connection succeded or failed.
+	 * the connection succeeded or failed.
 	 */
 	ret = k_sem_take(&sock->sock_send_sem, MDM_CMD_CONN_TIMEOUT);
 	if (ret == 0) {
