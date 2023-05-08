@@ -575,6 +575,7 @@ struct hl7800_iface_ctx {
 	enum hl7800_lpm low_power_mode;
 	enum mdm_hl7800_network_state network_state;
 	bool network_dropped;
+	bool dns_ready;
 	enum net_operator_status operator_status;
 	struct tm local_time;
 	int32_t local_time_offset;
@@ -2093,7 +2094,7 @@ static void dns_work_cb(struct k_work *work)
 #endif
 						       NULL };
 
-	if (ictx.iface && net_if_is_up(ictx.iface)) {
+	if (ictx.iface && net_if_is_up(ictx.iface) && !ictx.dns_ready) {
 		/* set new DNS addr in DNS resolver */
 		LOG_DBG("Refresh DNS resolver");
 		dnsCtx = dns_resolve_get_default();
@@ -2103,6 +2104,7 @@ static void dns_work_cb(struct k_work *work)
 			LOG_ERR("dns_resolve_init fail (%d)", ret);
 			return;
 		}
+		ictx.dns_ready = true;
 	}
 #endif
 }
@@ -2283,7 +2285,14 @@ static bool on_cmd_atcmdinfo_ipaddr(struct net_buf **buf, uint16_t len)
 	/* store new dns */
 	addr_start = delims[4] + 1;
 	addr_len = delims[5] - addr_start;
+	strncpy(temp_addr_str, addr_start, addr_len);
+	temp_addr_str[addr_len] = 0;
 	if (is_ipv4) {
+		ret = strncmp(temp_addr_str, ictx.dns_v4_string,
+							addr_len);
+		if (ret != 0) {
+			ictx.dns_ready = false;
+		}
 		strncpy(ictx.dns_v4_string, addr_start, addr_len);
 		ictx.dns_v4_string[addr_len] = 0;
 		ret = net_addr_pton(AF_INET, ictx.dns_v4_string, &ictx.dns_v4);
@@ -2291,6 +2300,10 @@ static bool on_cmd_atcmdinfo_ipaddr(struct net_buf **buf, uint16_t len)
 	}
 #ifdef CONFIG_NET_IPV6
 	else {
+		ret = strncmp(temp_addr_str, ictx.dns_v6_string, addr_len);
+		if (ret != 0) {
+			ictx.dns_ready = false;
+		}
 		/* store HL7800 formatted IPv6 DNS string temporarily */
 		strncpy(ictx.dns_v6_string, addr_start, addr_len);
 
@@ -3518,6 +3531,7 @@ static void iface_status_work_cb(struct k_work *work)
 		if (ictx.iface && net_if_is_up(ictx.iface) &&
 		    (ictx.low_power_mode != HL7800_LPM_PSM)) {
 			LOG_DBG("HL7800 iface DOWN");
+			ictx.dns_ready = false;
 			net_if_down(ictx.iface);
 		}
 		break;
@@ -3559,10 +3573,6 @@ static char *get_network_state_string(enum mdm_hl7800_network_state state)
 
 static void set_network_state(enum mdm_hl7800_network_state state)
 {
-	if ((ictx.network_state == HL7800_HOME_NETWORK || ictx.network_state == HL7800_ROAMING) &&
-	    state == HL7800_OUT_OF_COVERAGE) {
-		ictx.network_dropped = true;
-	}
 	ictx.network_state = state;
 	generate_network_state_event();
 }
@@ -4140,7 +4150,11 @@ static bool on_cmd_sock_notif(struct net_buf **buf, uint16_t len)
 
 	id = strtol(value, NULL, 10);
 	notif_val = strtol(delim + 1, NULL, 10);
-	LOG_DBG("+K**P_NOTIF: %d,%d", id, notif_val);
+	if (notif_val == HL7800_TCP_DISCON) {
+		LOG_DBG("+K**P_NOTIF: %d,%d", id, notif_val);
+	} else {
+		LOG_WRN("+K**P_NOTIF: %d,%d", id, notif_val);
+	}
 	sock = socket_from_id(id);
 	if (!sock) {
 		goto done;
@@ -4157,6 +4171,7 @@ static bool on_cmd_sock_notif(struct net_buf **buf, uint16_t len)
 		sock->error = -ENOTCONN;
 		break;
 	default:
+		ictx.network_dropped = true;
 		err = true;
 		sock->error = -EIO;
 		break;
@@ -4172,6 +4187,11 @@ static bool on_cmd_sock_notif(struct net_buf **buf, uint16_t len)
 		k_work_reschedule_for_queue(&hl7800_workq, &sock->notif_work, MDM_SOCK_NOTIF_DELAY);
 		if (trigger_sem) {
 			k_sem_give(&sock->sock_send_sem);
+		}
+
+		if (ictx.network_dropped) {
+			k_work_reschedule_for_queue(&hl7800_workq, &ictx.iface_status_work,
+						    IFACE_WORK_DELAY);
 		}
 	}
 done:
@@ -5453,6 +5473,7 @@ static int modem_reset_and_configure(void)
 
 	ictx.restarting = true;
 	if (ictx.iface && net_if_is_up(ictx.iface)) {
+		ictx.dns_ready = false;
 		net_if_down(ictx.iface);
 	}
 
@@ -6393,17 +6414,15 @@ int32_t mdm_hl7800_update_fw(const char *file_path)
 	/* get file info */
 	ret = fs_stat(file_path, &file_info);
 	if (ret >= 0) {
-		LOG_DBG("file '%s' size %zu", log_strdup(file_info.name),
-			file_info.size);
+		LOG_DBG("file '%s' size %zu", file_info.name, file_info.size);
 	} else {
-		LOG_ERR("Failed to get file [%s] info: %d",
-			log_strdup(file_path), ret);
+		LOG_ERR("Failed to get file [%s] info: %d", file_path, ret);
 		goto err;
 	}
 
 	ret = fs_open(&ictx.fw_update_file, file_path, FS_O_READ);
 	if (ret < 0) {
-		LOG_ERR("%s open err: %d", log_strdup(file_path), ret);
+		LOG_ERR("%s open err: %d", file_path, ret);
 		goto err;
 	}
 
