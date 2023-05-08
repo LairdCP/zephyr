@@ -1624,6 +1624,7 @@ static int send_data(struct hl7800_socket *sock, struct net_pkt *pkt)
 	char dst_addr[NET_IPV6_ADDR_LEN];
 	char buf[sizeof("AT+KUDPSND=##,\"" IPV6_ADDR_FORMAT "\",#####,####")];
 	size_t send_len, actual_send_len;
+	struct mdm_hl7800_event_socket_stats stats = { 0 };
 
 	send_len = 0, actual_send_len = 0;
 
@@ -1691,9 +1692,15 @@ done:
 	if (sock->type == SOCK_STREAM) {
 		if (sock->error == 0) {
 			sock->state = SOCK_CONNECTED;
+			stats.tcp_tx = actual_send_len;
+			event_handler(HL7800_EVENT_SOCKET_STATS, &stats);
 		}
 	} else {
 		sock->state = SOCK_IDLE;
+		if (ret == 0) {
+			stats.udp_tx = actual_send_len;
+			event_handler(HL7800_EVENT_SOCKET_STATS, &stats);
+		}
 	}
 
 	return ret;
@@ -4307,6 +4314,7 @@ static void sock_read(struct net_buf **buf, uint16_t len)
 	char ok_resp[sizeof(OK_STRING)];
 	char eof[sizeof(EOF_PATTERN)];
 	size_t out_len;
+	struct mdm_hl7800_event_socket_stats stats = { 0 };
 
 	sock = socket_from_id(ictx.last_socket_id);
 	if (!sock) {
@@ -4445,9 +4453,15 @@ done:
 	if (sock->type == SOCK_STREAM) {
 		if (sock->error == 0) {
 			sock->state = SOCK_CONNECTED;
+			stats.tcp_rx = sock->rx_size;
+			event_handler(HL7800_EVENT_SOCKET_STATS, &stats);
 		}
 	} else {
 		sock->state = SOCK_IDLE;
+		if (sock->error == 0) {
+			stats.udp_rx = sock->rx_size;
+			event_handler(HL7800_EVENT_SOCKET_STATS, &stats);
+		}
 	}
 exit:
 	allow_sleep(true);

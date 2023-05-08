@@ -108,6 +108,7 @@ enum mdm_hl7800_event {
 	HL7800_EVENT_POLTE,
 	HL7800_EVENT_SITE_SURVEY,
 	HL7800_EVENT_EDRX_PARAMETERS,
+	HL7800_EVENT_SOCKET_STATS,
 };
 
 enum mdm_hl7800_startup_state {
@@ -244,6 +245,13 @@ struct mdm_hl7800_edrx_parameters {
 	} nibbles;
 };
 
+struct mdm_hl7800_event_socket_stats {
+	uint16_t udp_tx;
+	uint16_t udp_rx;
+	uint16_t tcp_tx;
+	uint16_t tcp_rx;
+};
+
 /**
  * event - The type of event
  * event_data - Pointer to event specific data structure
@@ -266,6 +274,7 @@ struct mdm_hl7800_edrx_parameters {
  * HL7800_EVENT_POLTE_LOCATE_STATUS int
  * HL7800_EVENT_SITE_SURVEY mdm_hl7800_site_survey
  * HL7800_EVENT_EDRX_PARAMETERS mdm_hl7800_edrx_parameters
+ * HL7800_EVENT_SOCKET_STATS - struct mdm_hl7800_event_socket_stats
  */
 typedef void (*mdm_hl7800_event_callback_t)(enum mdm_hl7800_event event, void *event_data);
 
