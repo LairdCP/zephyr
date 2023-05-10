@@ -1261,7 +1261,7 @@ int32_t mdm_hl7800_get_functionality(void)
 int32_t mdm_hl7800_set_functionality(enum mdm_hl7800_functionality mode)
 {
 	int ret;
-	char buf[sizeof("AT+CFUN=0,0")] = { 0 };
+	char buf[sizeof("AT+CFUN=###,0")] = { 0 };
 
 	hl7800_lock();
 	wakeup_hl7800();
@@ -4112,7 +4112,7 @@ static bool on_cmd_sockerror(struct net_buf **buf, uint16_t len)
 }
 
 /* Handler: CME/CMS Error */
-static bool on_cmd_error_code(struct net_buf **buf, uint16_t len)
+static bool on_cmd_sock_error_code(struct net_buf **buf, uint16_t len)
 {
 	struct hl7800_socket *sock = NULL;
 	char value[MDM_MAX_RESP_SIZE];
@@ -4234,7 +4234,7 @@ done:
 
 static int delete_socket(struct hl7800_socket *sock, enum net_sock_type type, uint8_t id)
 {
-	char cmd[sizeof("AT+KUDPCLOSE=##")];
+	char cmd[sizeof("AT+KUDPCLOSE=###")];
 
 	if (type == SOCK_STREAM) {
 		snprintk(cmd, sizeof(cmd), "AT+KTCPDEL=%d", id);
@@ -4519,7 +4519,7 @@ done:
 
 static int start_socket_rx(struct hl7800_socket *sock, uint16_t rx_size)
 {
-	char sendbuf[sizeof("AT+KTCPRCV=##,####")];
+	char sendbuf[sizeof("AT+KTCPRCV=+#########,#####")];
 
 	if ((sock->socket_id <= 0) || (sock->rx_size <= 0)) {
 		LOG_WRN("Cannot start socket RX, ID: %d rx size: %d",
@@ -4901,8 +4901,8 @@ static void hl7800_rx(void)
 		CMD_HANDLER("ERROR", sockerror),
 
 		/* SOLICITED SOCKET RESPONSES */
-		CMD_HANDLER("+CME ERROR: ", error_code),
-		CMD_HANDLER("+CMS ERROR: ", error_code),
+		CMD_HANDLER("+CME ERROR: ", sock_error_code),
+		CMD_HANDLER("+CMS ERROR: ", sock_error_code),
 		CMD_HANDLER("+CEER: ", sockerror),
 		CMD_HANDLER("+KTCPCFG: ", sock_tcp_create),
 		CMD_HANDLER("+KUDPCFG: ", sock_udp_create),
@@ -5420,24 +5420,24 @@ static int compare_versions(char *v1, const char *v2)
 		ver2 = strtoul(v2, &tail2, 10);
 
 		/* if numbers differ, then set the result */
-		if (ver1 < ver2)
+		if (ver1 < ver2) {
 			result = -1;
-		else if (ver1 > ver2)
+		} else if (ver1 > ver2) {
 			result = 1;
-		else {
+		} else {
 			/* if numbers are the same, go to next level */
 			v1 = tail1;
 			v2 = tail2;
 			/* if we reach the end of both, then they are identical */
-			if (*v1 == '\0' && *v2 == '\0')
+			if (*v1 == '\0' && *v2 == '\0') {
 				break;
 			/* if we reach the end of one only, it is the smaller */
-			else if (*v1 == '\0')
+			} else if (*v1 == '\0') {
 				result = -1;
-			else if (*v2 == '\0')
+			} else if (*v2 == '\0') {
 				result = 1;
 			/*  not at end ... so far they match so keep going */
-			else {
+			} else {
 				v1++;
 				v2++;
 			}
@@ -5910,11 +5910,11 @@ static void mdm_power_off_work_callback(struct k_work *item)
 	ARG_UNUSED(item);
 	int ret;
 #if defined(CONFIG_DNS_RESOLVER)
-	struct dns_resolve_context *dnsCtx;
+	struct dns_resolve_context *dns_ctx;
 
 	LOG_DBG("Shutdown DNS resolver");
-	dnsCtx = dns_resolve_get_default();
-	(void)dns_resolve_close(dnsCtx);
+	dns_ctx = dns_resolve_get_default();
+	(void)dns_resolve_close(dns_ctx);
 	ictx.dns_ready = false;
 #endif
 
@@ -5928,6 +5928,7 @@ static void mdm_power_off_work_callback(struct k_work *item)
 		return;
 	}
 	prepare_io_for_reset();
+	ictx.dns_ready = false;
 	ictx.configured = false;
 	ictx.off = true;
 	/* bring the iface down */
