@@ -3555,15 +3555,14 @@ static void iface_status_work_cb(struct k_work *work)
 	switch (state) {
 	case HL7800_HOME_NETWORK:
 	case HL7800_ROAMING:
-		if (ictx.iface && !net_if_is_up(ictx.iface)) {
+		if (ictx.iface) {
 			LOG_DBG("HL7800 iface UP");
 			net_if_up(ictx.iface);
 		}
 		break;
 	case HL7800_OUT_OF_COVERAGE:
 	default:
-		if (ictx.iface && net_if_is_up(ictx.iface) &&
-		    (ictx.low_power_mode != HL7800_LPM_PSM)) {
+		if (ictx.iface && (ictx.low_power_mode != HL7800_LPM_PSM)) {
 			LOG_DBG("HL7800 iface DOWN");
 			ictx.dns_ready = false;
 			net_if_down(ictx.iface);
@@ -5128,11 +5127,9 @@ static void mdm_vgpio_work_cb(struct k_work *item)
 		    ictx.desired_sleep_level == HL7800_SLEEP_LITE_HIBERNATE) {
 			if (ictx.sleep_state != ictx.desired_sleep_level) {
 				set_sleep_state(ictx.desired_sleep_level);
-			} else {
-				LOG_WRN("Unexpected sleep condition");
 			}
 		}
-		if (ictx.iface && ictx.initialized && net_if_is_up(ictx.iface) &&
+		if (ictx.iface && ictx.initialized &&
 		    ictx.low_power_mode != HL7800_LPM_PSM) {
 			net_if_down(ictx.iface);
 		}
@@ -5283,15 +5280,10 @@ void mdm_uart_cts_callback(const struct device *port, struct gpio_callback *cb, 
 	}
 
 #ifdef CONFIG_MODEM_HL7800_LOW_POWER_MODE
-	if (ictx.desired_sleep_level == HL7800_SLEEP_SLEEP) {
-		if (ictx.cts_state) {
-			/* HL7800 is not awake, shut down UART to save power */
+	if (ictx.cts_state) {
+		/* HL7800 is not awake, shut down UART to save power */
+		if (ictx.allow_sleep) {
 			shutdown_uart();
-		} else {
-			power_on_uart();
-			if (ictx.sleep_state == HL7800_SLEEP_SLEEP) {
-				allow_sleep(false);
-			}
 		}
 	} else {
 		if (ictx.off) {
@@ -5543,8 +5535,8 @@ static int modem_reset_and_configure(void)
 #endif
 
 	ictx.restarting = true;
-	if (ictx.iface && net_if_is_up(ictx.iface)) {
-		ictx.dns_ready = false;
+	ictx.dns_ready = false;
+	if (ictx.iface) {
 		net_if_down(ictx.iface);
 	}
 
@@ -5750,7 +5742,6 @@ reboot:
 	snprintk(set_edrx_msg, sizeof(set_edrx_msg), "AT+CEDRXS=2,%d,\"%s\"",
 		 edrx_act_type, CONFIG_MODEM_HL7800_EDRX_VALUE);
 	SEND_AT_CMD_EXPECT_OK(set_edrx_msg);
-	SEND_AT_CMD_EXPECT_OK(set_edrx_msg);
 #endif
 	sleep = true;
 #else
@@ -5932,7 +5923,7 @@ static void mdm_power_off_work_callback(struct k_work *item)
 	ictx.configured = false;
 	ictx.off = true;
 	/* bring the iface down */
-	if (ictx.iface && net_if_is_up(ictx.iface)) {
+	if (ictx.iface) {
 		net_if_down(ictx.iface);
 	}
 	LOG_INF("Modem powered off");
