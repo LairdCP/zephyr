@@ -6550,19 +6550,26 @@ int32_t mdm_hl7800_update_fw(const char *file_path)
 		goto err;
 	}
 
-	if (ictx.iface && net_if_is_up(ictx.iface)) {
+	notify_all_tcp_sockets_closed();
+	hl7800_stop_rssi_work();
+	k_work_cancel_delayable(&ictx.iface_status_work);
+	k_work_cancel_delayable(&ictx.dns_work);
+	k_work_cancel_delayable(&ictx.mdm_reset_work);
+	k_work_cancel_delayable(&ictx.allow_sleep_work);
+	k_work_cancel_delayable(&ictx.delete_untracked_socket_work);
+	ictx.dns_ready = false;
+	if (ictx.iface) {
 		LOG_DBG("HL7800 iface DOWN");
-		hl7800_stop_rssi_work();
 		net_if_down(ictx.iface);
-		notify_all_tcp_sockets_closed();
 	}
 
+	/* HL7800 will stay locked for the duration of the FW update */
 	/* start firmware update process */
 	LOG_INF("Initiate FW update, total packets: %zd",
 		((file_info.size / XMODEM_DATA_SIZE) + 1));
 	set_fota_state(HL7800_FOTA_START);
-	snprintk(cmd1, sizeof(cmd1), "AT+WDSD=%zd", file_info.size);
-	send_at_cmd(NULL, cmd1, K_NO_WAIT, 0, false);
+	(void)snprintk(cmd1, sizeof(cmd1), "AT+WDSD=%zd", file_info.size);
+	(void)send_at_cmd(NULL, cmd1, K_NO_WAIT, 0, false);
 
 	goto done;
 
