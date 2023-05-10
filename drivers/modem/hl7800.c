@@ -47,6 +47,10 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_MODEM_LOG_LEVEL);
 #include "modem_receiver.h"
 #include <drivers/modem/hl7800.h>
 
+#ifdef CONFIG_MODEM_HL7800_PSM
+#error "PSM untested on this branch"
+#endif
+
 #define PREFIXED_SWITCH_CASE_RETURN_STRING(prefix, val)                        \
 	case prefix##_##val: {                                                 \
 		return #val;                                                   \
