@@ -290,8 +290,8 @@ static inline bool log_backend_is_active(
  * @brief Get file number
  *
  * @param offset = 0 for current, 1 for current - 1,
- * When offset invalid output is clamped to newest or oldest.
- *s
+ * When offset is invalid output is clamped to newest or oldest.
+ *
  * @retval file numeral
  */
 int log_backend_fs_get_log_number(int offset);
