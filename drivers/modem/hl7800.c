@@ -3982,6 +3982,18 @@ static bool on_cmd_edrx_parameters(struct net_buf **buf, uint16_t len)
 	return true;
 }
 
+static bool on_cmd_edrx_parameters_rdp(struct net_buf **buf, uint16_t len)
+{
+	LOG_INF("+CEDRXRDP");
+	return on_cmd_edrx_parameters(buf, len);
+}
+
+static bool on_cmd_edrx_parameters_p(struct net_buf **buf, uint16_t len)
+{
+	LOG_INF("+CEDRXP");
+	return on_cmd_edrx_parameters(buf, len);
+}
+
 /* Handler: +KCELLMEAS: <RSRP>,<Downlink Path Loss>,<PUSCH Tx Power>,
  *                       <PUCCH Tx Power>,<SiNR>
  */
@@ -4890,14 +4902,14 @@ static void hl7800_rx(void)
 		CMD_HANDLER("+CFUN: ", modem_functionality),
 		CMD_HANDLER("%MEAS: ", survey_status),
 		CMD_HANDLER("+CCLK: ", rtc_query),
-		CMD_HANDLER("+CEDRXRDP: ", edrx_parameters),
+		CMD_HANDLER("+CEDRXRDP: ", edrx_parameters_rdp),
 
 		/* UNSOLICITED modem information */
 		/* mobile startup report */
 		CMD_HANDLER("+KSUP: ", startup_report),
 		/* network status */
 		CMD_HANDLER("+CEREG: ", network_report),
-		CMD_HANDLER("+CEDRXP: ", edrx_parameters),
+		CMD_HANDLER("+CEDRXP: ", edrx_parameters_p),
 
 		/* SOLICITED CMD AND SOCKET RESPONSES */
 		CMD_HANDLER("OK", sockok),
@@ -5517,6 +5529,13 @@ int32_t mdm_hl7800_set_bands(const char *bands)
 	hl7800_unlock();
 
 	return ret;
+}
+
+int mdm_hl7800_query_edrx(void)
+{
+	uint8_t cmd[] = "AT+CEDRXRDP";
+
+	return mdm_hl7800_send_at_cmd(cmd);
 }
 
 static int modem_reset_and_configure(void)

@@ -636,6 +636,14 @@ void mdm_hl7800_register_cts_callback(void (*func)(int state));
  */
 int32_t mdm_hl7800_set_bands(const char *bands);
 
+/**
+ * @brief Issue the eDRX Read Dynamic Parameters command.
+ * Result will be returned by HL7800_EVENT_EDRX_PARAMETERS event.
+ *
+ * @return int32_t negative errno, 0 on success
+ */
+int mdm_hl7800_query_edrx(void);
+
 #ifdef __cplusplus
 }
 #endif
