@@ -35,6 +35,7 @@
 		rx-en-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>;
 		tx-en-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
 		pdn-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		spi-if = <&nrf_radio_fem_spi>;
 		supply-voltage-mv = <3300>;
 	};
 
@@ -60,10 +61,26 @@
 	fem = <&nrf_radio_fem>;
 };
 
+/* Can't be used with SPI0/FEM */
 &uart0 {
-	status = "okay";
+	status = "disabled";
 	current-speed = <115200>;
 	pinctrl-0 = <&uart0_default>;
 	pinctrl-1 = <&uart0_sleep>;
 	pinctrl-names = "default", "sleep";
+};
+
+&spi0 {
+	status = "okay";
+	cs-gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-1 = <&spi0_sleep>;
+	pinctrl-names = "default", "sleep";
+	
+	nrf_radio_fem_spi: nrf21540_fem_spi@0 {
+		status = "okay";
+		compatible = "nordic,nrf21540-fem-spi";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+	};
 };

@@ -23,4 +23,20 @@
 		};
 	};
 
+	spi0_default: spi0_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_MISO, 1, 4)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 1)>,
+				<NRF_PSEL(SPIM_SCK, 1, 0)>;
+		};
+	};
+
+	spi0_sleep: spi0_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_MISO, 1, 4)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 1)>,
+				<NRF_PSEL(SPIM_SCK, 1, 0)>;
+			low-power-enable;
+		};
+	};
 };
