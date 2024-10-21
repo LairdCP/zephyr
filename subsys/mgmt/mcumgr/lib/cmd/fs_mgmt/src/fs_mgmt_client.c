@@ -392,7 +392,7 @@ int fs_mgmt_client_download(struct zephyr_smp_transport *transport, const char *
 		return MGMT_ERR_BUSY;
 	}
 
-	fs_ctx.first_chunk = true;
+	fs_ctx.first_chunk = (*offset == 0) ? true : false;
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
 	fs_ctx.size = *size; /* max size */
@@ -423,7 +423,7 @@ int fs_mgmt_client_download_file(struct zephyr_smp_transport *transport, const c
 		return MGMT_ERR_BUSY;
 	}
 
-	fs_ctx.first_chunk = true;
+	fs_ctx.first_chunk = (*offset == 0) ? true : false;
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
 	fs_ctx.size = (*size == 0) ? SIZE_MAX : *size;
@@ -458,7 +458,7 @@ int fs_mgmt_client_upload(struct zephyr_smp_transport *transport, const char *na
 		return MGMT_ERR_BUSY;
 	}
 
-	fs_ctx.first_chunk = true;
+	fs_ctx.first_chunk = (*offset == 0) ? true : false;
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
 	fs_ctx.size = size;
@@ -505,7 +505,7 @@ int fs_mgmt_client_upload_file(struct zephyr_smp_transport *transport, const cha
 		return MGMT_ERR_BUSY;
 	}
 
-	fs_ctx.first_chunk = true;
+	fs_ctx.first_chunk = (*offset == 0) ? true : false;
 	fs_ctx.status = 0;
 	fs_ctx.offset = *offset;
 	fs_ctx.size = size;
