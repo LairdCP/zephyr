@@ -368,6 +368,9 @@ static int upload(struct zephyr_smp_transport *transport)
 
 /* The UL chunk size is currently a compile time constant that must match on
  * both sides of the link.
+ *
+ * With CONFIG_MCUMGR_BUF_SIZE=2050, this is 1974 bytes and
+ * FS_MGMT_DL_CHUNK_SIZE is 2008 bytes.
  */
 static int get_chunk_size(struct zephyr_smp_transport *transport)
 {
