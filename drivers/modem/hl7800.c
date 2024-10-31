@@ -3772,6 +3772,36 @@ done:
 	return true;
 }
 
+/* Unsolicited handler: +CTZV: <tz>
+ * +zz or -zz. Value can have a leading zero.
+ */
+static bool on_cmd_time_zone_report(struct net_buf **buf, uint16_t len)
+{
+	size_t out_len;
+	char value[MDM_MAX_RESP_SIZE];
+	const size_t EXPECTED_LEN = strlen("+zz");
+	int offset = 0;
+	bool ok = false;
+
+	memset(value, 0, sizeof(value));
+	out_len = net_buf_linearize(value, sizeof(value), *buf, 0, len);
+	if (out_len >= EXPECTED_LEN) {
+		offset = (int)strtol(value, NULL, 10);
+		if (offset >= -48 && offset <= 56) {
+			offset *= SECONDS_PER_QUARTER_HOUR;
+			ok = true;
+		}
+	}
+
+	LOG_WRN("Time zone report: %s offset: %d minutes", ok ? "ok" : "fail", offset);
+
+	if (ok) {
+		event_handler(HL7800_EVENT_TIME_ZONE_UPDATE, &offset);
+	}
+
+	return true;
+}
+
 /* Handler: +CCLK: "yy/MM/dd,hh:mm:ss±zz" */
 static bool on_cmd_rtc_query(struct net_buf **buf, uint16_t len)
 {
@@ -4910,6 +4940,8 @@ static void hl7800_rx(void)
 		/* network status */
 		CMD_HANDLER("+CEREG: ", network_report),
 		CMD_HANDLER("+CEDRXP: ", edrx_parameters_p),
+		/* time zone reporting */
+		CMD_HANDLER("+CTZV: ", time_zone_report),
 
 		/* SOLICITED CMD AND SOCKET RESPONSES */
 		CMD_HANDLER("OK", sockok),
@@ -5847,6 +5879,12 @@ reboot:
 		SEND_AT_CMD_EXPECT_OK("AT+KTCPCFG?");
 		SEND_AT_CMD_EXPECT_OK("AT+KUDPCFG?");
 	}
+
+	/* Ensure time zone update on first network connect is enabled. */
+	SEND_AT_CMD_EXPECT_OK("AT+CTZU=1");
+
+	/* Enable time zone reporting */
+	SEND_AT_CMD_EXPECT_OK("AT+CTZR=1");
 
 	/* The modem has been initialized and now the network interface can be
 	 * started in the CEREG message handler.
