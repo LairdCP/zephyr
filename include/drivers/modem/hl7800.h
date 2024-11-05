@@ -109,7 +109,6 @@ enum mdm_hl7800_event {
 	HL7800_EVENT_SITE_SURVEY,
 	HL7800_EVENT_EDRX_PARAMETERS,
 	HL7800_EVENT_SOCKET_STATS,
-	HL7800_EVENT_TIME_ZONE_UPDATE,
 };
 
 enum mdm_hl7800_startup_state {
@@ -276,7 +275,6 @@ struct mdm_hl7800_event_socket_stats {
  * HL7800_EVENT_SITE_SURVEY mdm_hl7800_site_survey
  * HL7800_EVENT_EDRX_PARAMETERS mdm_hl7800_edrx_parameters
  * HL7800_EVENT_SOCKET_STATS - struct mdm_hl7800_event_socket_stats
- * HL7800_EVENT_TIME_ZONE_UPDATE - int
  */
 typedef void (*mdm_hl7800_event_callback_t)(enum mdm_hl7800_event event, void *event_data);
 
